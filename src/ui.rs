@@ -9,6 +9,7 @@ use crate::parser;
 pub const EVENT_PICK_FILE: &str = "pick_file";
 pub const EVENT_SEND_TO_WATCH: &str = "send_to_watch";
 pub const EVENT_MOUSE_LEAVE: &str = "button_mouse_leave";
+pub const EVENT_COPY_LOG: &str = "copy_log";
 pub const PKG_NAME: &str = "com.schedule.vela";
 pub const ENTRY_PAGE: &str = "pages/index";
 
@@ -80,6 +81,30 @@ fn row() -> ui_v3::Element {
         .width_full()
 }
 
+// 复制图标
+const COPY_ICON: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>"#;
+
+fn copy_btn(hovered: bool) -> ui_v3::Element {
+    ui_v3::Element::new(ui_v3::ElementType::Button, None)
+        .without_default_styles()
+        .on(ui_v3::Event::Click, EVENT_COPY_LOG)
+        .on(ui_v3::Event::MouseEnter, EVENT_COPY_LOG)
+        .on(ui_v3::Event::MouseLeave, EVENT_MOUSE_LEAVE)
+        .width(28)
+        .height(28)
+        .radius(8)
+        .flex()
+        .align_center()
+        .justify_center()
+        .bg(if hovered { BTN_HOVER } else { BTN_BG })
+        .child(
+            ui_v3::Element::new(ui_v3::ElementType::Svg, Some(COPY_ICON))
+                .width(16)
+                .height(16)
+                .text_color(TEXT),
+        )
+}
+
 fn log(line: &str) {
     let mut s = state().lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     s.log.push(line.to_string());
@@ -107,6 +132,7 @@ pub async fn handle_ui_event(evtype: ui_v3::Event, event_id: &str, _payload: &st
         ui_v3::Event::Click => match event_id {
             EVENT_PICK_FILE => pick_file().await,
             EVENT_SEND_TO_WATCH => send_to_watch().await,
+            EVENT_COPY_LOG => copy_log().await,
             _ => {}
         },
         ui_v3::Event::MouseEnter => {
@@ -238,6 +264,16 @@ async fn send_to_watch() {
     redraw();
 }
 
+async fn copy_log() {
+    let text = {
+        let s = state().lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        s.log.join("\n")
+    };
+    if !text.is_empty() {
+        let _ = psys_host::clipboard::write_text(&text).await;
+    }
+}
+
 fn build_ui(s: &UiState) -> ui_v3::Element {
     // 首行：未选择文件时显示支持提示，选择后显示文件名
     let (file_label, file_color) = if s.file_name.is_empty() {
@@ -259,20 +295,29 @@ fn build_ui(s: &UiState) -> ui_v3::Element {
             s.hovered.as_deref() == Some(EVENT_SEND_TO_WATCH),
         ));
 
-    // 日志
-    let mut log_card = ui_v3::Element::new(ui_v3::ElementType::ScrollArea, None)
+    // 日志卡片
+    let header = row()
+        .align_center()
+        .gap(8)
+        .child(p("日志").size(18).text_color(MUTED).flex_grow(1.0))
+        .child(copy_btn(s.hovered.as_deref() == Some(EVENT_COPY_LOG)));
+
+    let mut log_scroll = ui_v3::Element::new(ui_v3::ElementType::ScrollArea, None)
         .width_full()
-        .height(LOG_HEIGHT)
+        .height(LOG_HEIGHT);
+    if s.pending_scroll {
+        log_scroll = log_scroll.scroll_top(LOG_SCROLL_MAX);
+    }
+    for line in &s.log {
+        log_scroll = log_scroll.child(p(line).size(13).text_color(LOG_C).margin_bottom(2));
+    }
+    let log_card = col()
         .radius(RADIUS)
         .padding(12)
-        .bg(CARD_BG);
-    if s.pending_scroll {
-        log_card = log_card.scroll_top(LOG_SCROLL_MAX);
-    }
-    log_card = log_card.child(p("日志").size(18).text_color(MUTED).margin_bottom(8));
-    for line in &s.log {
-        log_card = log_card.child(p(line).size(13).text_color(LOG_C).margin_bottom(2));
-    }
+        .gap(8)
+        .bg(CARD_BG)
+        .child(header)
+        .child(log_scroll);
 
     col()
         .padding(20)

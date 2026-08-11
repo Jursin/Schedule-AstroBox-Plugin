@@ -35,6 +35,7 @@ python scripts/build_dist.py --release --package
 - `device` - 访问设备信息
 - `interconnect` - 与手环应用通信
 - `thirdpartyapp` - 访问第三方应用
+- `clipboard.write` - 复制日志到剪贴板
 
 ## 版本要求
 - WASI 版本：2

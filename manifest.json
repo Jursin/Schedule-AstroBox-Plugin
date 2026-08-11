@@ -8,6 +8,6 @@
     "entry": "schedule_plugin_rust.wasm",
     "wasi_version": 2,
     "api_level": 3,
-    "permissions": ["device", "interconnect", "thirdpartyapp"],
+    "permissions": ["device", "interconnect", "thirdpartyapp", "clipboard.write"],
     "additional_files": []
 }
